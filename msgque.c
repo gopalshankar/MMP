@@ -47,6 +47,7 @@ PUBLIC int do_minit(message *m)
 		
 	/* This is new request so, give him a new MQueue */
 	mQueue_[ firstFreeQueue ].token = token;
+	insertUser( mQueue_[i], who );
 	leaveCriticalSection();
 	
 	user_mq->queue = &mQueue_[i];
@@ -69,13 +70,13 @@ PUBLIC int do_msend(message *m)
 	
 	/* Validate that such token/queue exists */
 	MQueue *mq = user_mq->queue;
-	if( mq < &mQueue[0] || mq > &mQueue[MQ_MAX_MSGQUES] || mq.token != user_mq->token )
+	if( INVALID_MQ( mq, user_mq->token ) )
 		return ( ERR_INVALID_MQ );
 	
 	/* Block if MQueue is FULL */
 	if( mq->queueLen == MQ_MAX_MESSAGES ) {
 		 enterCriticalSection();
-		 insertSender( mq, who );
+		 setUserProperty( mq, MQ_SENDER, MQ_USER_BLOCKED );
 		 leaveCriticalSection();
 		 
 		 /* Block sender */
@@ -84,7 +85,7 @@ PUBLIC int do_msend(message *m)
 		 /* Add message to mq->MsgNode */
 		 enterCriticalSection();
 		 removeSender( mq, who );
-		 insertMessage( mq, message );
+		 setUserProperty( mq, MQ_SENDER, MQ_USER_ACTIVE );
 		 leaveCriticalSection();
 		 return MQ_SUCCESS;
 	}
@@ -95,13 +96,12 @@ PUBLIC int do_msend(message *m)
 	leaveCriticalSection();
 	
 	/* Wake-up Recievers if they are sleeping */
-	if( mq->rhead ) {
+	if( mq->userHead ) {
 		enterCriticalSection();
-		MQReciever *recv = mq->rhead;
-		while( recv ) {
-			removeReciever( mq, next->procNr );
-			unpause( next->procNr ); /* Wake-up */
-			recv = recv->next;
+		MQUser *user = mq->userHead;
+		while( user && user->type==MQ_RECIEVER && user->state=MQ_USER_BLOCKED ) {
+			unpause( user->procNr ); /* Wake-up */
+			user = user->next;
 		}
 		leaveCriticalSection();
 	}
@@ -122,20 +122,20 @@ PUBLIC int do_mrecv(message *m)
 
 	/* Validate that such token/queue exists */
 	MQueue *mq = user_mq->queue;
-	if( mq < &mQueue[0] || mq > &mQueue[MQ_MAX_MSGQUES] || mq.token != user_mq->token )
+	if( INVALID_MQ( mq, user_mq->token ))
 		return ( ERR_INVALID_MQ );
 	
 	/* Block if MQueue is EMPTY */
 	if( mq->MsgNode == NULL ) {
 		 enterCriticalSection();
-		 insertReciever( mq, who );
+		 setUserProperty( mq, MQ_RECIEVER, MQ_USER_BLOCKED );
 		 leaveCriticalSection();
 		 
 		 /* Block Reciever */
 		 pause();
-		 
+		  
 		 enterCriticalSection();
-		 removeReciever( mq, who );
+		 setUserProperty( mq, MQ_RECIEVER, MQ_USER_ACTIVE );
 		 leaveCriticalSection();
 	}
 	
@@ -147,11 +147,10 @@ PUBLIC int do_mrecv(message *m)
 	/* Wake-up Sender if they are sleeping */
 	if( mq->shead ) {
 		enterCriticalSection();
-		MQSender *sender = mq->shead;
-		while( sender ) {
-			removeSender( mq, next->procNr );
-			unpause( next->procNr ); /* Wake-up */
-			sender = sender->next;
+		MQUser *user = mq->userHead;
+		while( user && user->type==MQ_SENDER && user->state=MQ_USER_BLOCKED ) {
+			unpause( user->procNr ); /* Wake-up */
+			user = user->next;
 		}
 		leaveCriticalSection();
 	}
@@ -161,36 +160,92 @@ PUBLIC int do_mrecv(message *m)
 
 PUBLIC int do_mclose(message *m)
 {
+	MsgQue *user_mq;
 	printf("\nCS551 I am inside mclose!\n");
 	
+	/* Read MsgQue */
+	token = m_in.m1_i1;
+	sys_datacopy(who, (virbytes) m_in.m1_p1, SELF, (virbytes) user_mq, sizeof(MsgQue) );
+	
+	/* Validate that such token/queue exists */
+	MQueue *mq = user_mq->queue;
+
+	if( INVALID_MQ( mq, user_mq->token ) || mq.userHead == NULL )
+		return ( ERR_INVALID_MQ );
+	
+	/* Remove element from userHead */
+	enterCriticalSection();
+	removeUser( mq, who );
+	if( mq.userHead == NULL ) { /* free the Message Queue */
+		mq.token = MQ_FREE;
+		mq.queueLen = 0; 
+		removeAllMessages( mq );
+	}
+	leaveCriticalSection();
 	
 	return MQ_SUCCESS;
 }
 
 PUBLIC int do_mclean(message *m)
 {
+	MsgQue *user_mq;
+	int rc;
+
 	printf("\nCS551 I am inside mclean!\n");
 	
+	/* Read MsgQue */
+	token = m_in.m1_i1;
+	sys_datacopy(who, (virbytes) m_in.m1_p1, SELF, (virbytes) user_mq, sizeof(MsgQue) );
+	
+	/* Validate that such token/queue exists */
+	MQueue *mq = user_mq->queue;
+	if( INVALID_MQ( mq, user_mq->token ) || mq.userHead == NULL )
+		return ( ERR_INVALID_MQ );
+		
+	/* Ping every one and see if they are all alive */
+	MQUser *user = mq->userHead;
+	while( user ) {
+		rc = kill( user->proc_nr, 0 ); /* Not sure which API to use */
+		if( rc != 0 ) {
+			removeUser( mq, user->proc_nr );
+		}
+	}
+	
+	/* If there are active users mq->userHead will not be NULL */
+	if( mq->userHead )
+		return( ERR_MQ_INUSE );
+		
+	/* Free the MQueue */
+	enterCriticalSection();
+	mq.token = MQ_FREE;
+	mq.queueLen = 0; 
+	removeAllMessages( mq );
+	enterCriticalSection();
 	
 	return MQ_SUCCESS;
 }
 
 
-PRIVATE int insertSender( MQueue *mq, int proc_nr) {
+PRIVATE int insertUser( MQueue *mq, int proc_nr) {
 	
 }
 
 
-PRIVATE int removeSender( MQueue *mq, int proc_nr ) {
+PRIVATE int removeUser( MQueue *mq, int proc_nr ) {
 	
 }
 
-PRIVATE int insertReciever( MQueue *mq, int proc_nr ) {
+/* This is not supposed to fail */
+PRIVATE int setUserProperty( MQueue *mq, int type, int state ) {
 	
-}
-
-PRIVATE int removeReciever( MQueue *mq, int proc_nr ) {
-	
+	MQUser *user = mq->userHead;
+	while( user ) 	{
+		if( user->proc_nr == who ) {
+			user->type = type;
+			user->state = state;
+		}
+	}
+	return MQ_SUCCESS;
 }
 
 PRIVATE int insertMessage( MQueue *mq, char *message ) {
@@ -204,10 +259,9 @@ PRIVATE int insertMessage( MQueue *mq, char *message ) {
 	/* Logic to add message */
 }
 
-PRIVATE int readReciever( MQueue *mq, char *message ) {
+PRIVATE int readReciever( MQueue *mq ) {
 	/* if you are the last reciever in the queue 
 	 * then delete the element from MsgNode */
-
 }
 
 /* Called by readReciever */
