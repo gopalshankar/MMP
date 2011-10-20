@@ -8,21 +8,15 @@
  #include <libmsgque.h>
 
 
-/* This structure hold receivers who are waiting 
- * for messages to arrive
+/* This structure hold all MQ users who are registered
+ * 
  */
-struct MQReciever {   /* Dynamically allocated */
+struct MQUser {   /* Dynamically allocated */
 	int messageNo; 			 /* This is the last message recieve used */
-	int procNr: 			 /* Receiver's process number */
-	struct MQReciever *next; /* If many are waiting to read message */
-}
-
-/* This structure hold senders who are waiting 
- * for messages to be removed and queue gets freed.
- */
-struct MQSender {   /* Dynamically allocated */
-	int procNr: 			/* Sender's process number */
-	struct MQSender *next;  /* If many are waiting to write message */
+	int procNr; 			 /* Receiver's process number */
+	int state;				 /* Blocked or Active */
+	int type; 				 /* Sender or reciever = has meaning only with 'state' */
+	struct MQUser *next; /* If many are waiting to read message */
 }
 
  /* 
@@ -41,14 +35,14 @@ struct MsgNode {
 }
   
 struct MQueue {	  
-	int token;	/* Unique identifier for this message queue, user gives this */
+	int token;	/* Unique identifier for this message queue, 
+	             * user gives this */
 	int queueLen;
-	struct MsgNode *mhead; 
-
-	struct MQSender *shead;
-	struct MQReciever *rhead;
+	struct MsgNode *msgHead; 
+	struct MQUser *userHead;
 }
- 
+#define INVALID_MQ( mq, tok ) (mq < mQueue[0] || mq > mQueue[MQ_MAX_MSGQUES] || mq->token != tok )
+	
  /* 
   * struct MsgQues holds list of all message queue that are 
   * created by applications.
