@@ -1,4 +1,3 @@
-
 /* Might go in misc.c
  *
  * Message Queue Multicast Implementation
@@ -60,7 +59,7 @@ PRIVATE int setUserProperty( MQueue *mq, int type, int state ) {
 
 PRIVATE int insertMessage( MQueue *mq, char *message ) {
 	if( mq->queueLen == MQ_MAX_MESSAGES )
-		return (MQ_ERR_MAX_MESSAGES)
+		return (MQ_ERR_MAX_MESSAGES);
 
 	mq->queueLen= mq->queueLen + 1;		
 	
