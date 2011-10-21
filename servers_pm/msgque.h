@@ -5,8 +5,8 @@
  * Multicast Message Queue Kernel Functions and Structures
  * 
  */
- #include <libmsgque.h>
-
+ #include <minix/libmsgque.h>
+ #include "msgque_const.h"
 
 /* This structure hold all MQ users who are registered
  * 
@@ -17,7 +17,7 @@ struct MQUser {   /* Dynamically allocated */
 	int state;				 /* Blocked or Active */
 	int type; 				 /* Sender or reciever = has meaning only with 'state' */
 	struct MQUser *next; /* If many are waiting to read message */
-}
+};
 
  /* 
   * Linked list maintaining all the message posted by msend
@@ -32,7 +32,7 @@ struct MsgNode {
 	int messageNo;
 	char *message;   
 	struct MsgNode *next;
-}
+};
   
 struct MQueue {	  
 	int token;	/* Unique identifier for this message queue, 
@@ -40,7 +40,7 @@ struct MQueue {
 	int queueLen;
 	struct MsgNode *msgHead; 
 	struct MQUser *userHead;
-}
+};
 #define INVALID_MQ( mq, tok ) (mq < mQueue[0] || mq > mQueue[MQ_MAX_MSGQUES] || mq->token != tok )
 	
  /* 
@@ -60,7 +60,7 @@ struct MQueue {
  
  struct MQueues {
 	 struct MQueue queues[MQ_MAX_MSGQUES]; /* 16 * MQ_MAX_MSGQUES bytes */
- }
+ };
 
 
 

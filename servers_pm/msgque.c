@@ -9,10 +9,8 @@
  */
 
 #include "msgque.h"
-#include "msgque_const.h"
-#include <libmsgque.h> /* so that you can read MsgQue members here */
 
-PRIVATE struct MQueues mQueues_;
+PRIVATE struct MQueues mQueues;
 
 
 
