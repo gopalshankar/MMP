@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
+#include <minix/libmsgque.h>
 
 #ifndef DEBUG
 #define DEBUG //comment out to remove debug traces from default compilation
@@ -18,40 +19,17 @@ void printUsage(void)
     printf("Usage: \t\t\targ[1]=Msg Queue id\n\t\t\targ[2]=Number of processes\n");
 }
 
-int mregister(key_t key)
-{
-    return 0;
-}
 
-int mderegister(key_t key)
-{
-    return 0;
-}
-
-int msend(message_t msg)
-{
-#ifdef DEBUG
-    printf("msend():%d!\n", msg.src_dst, msg.buf);
-#endif
-    return 0;
-}
-
-int mrecv(message_t *msg)
-{
-#ifdef DEBUG
-    printf("mrecv()!\n");
-#endif
-    return 0;
-}
-
-void child_proc(key_t key, int proc_num)
+void child_proc(int key, int proc_num)
 {
     /* */
     /*
     Declare variable to hold seconds on clock.
     */
+	struct MsgQue msgque;
     time_t seconds;
-    message_t msg;
+    char msg[50];
+	int msg_num = 1;
     /*
     Get value from system clock and
     place in seconds variable.
@@ -63,8 +41,7 @@ void child_proc(key_t key, int proc_num)
     */
     srand((unsigned int) seconds);
 
-    mregister(key);
-    msg.src_dst=proc_num;
+    minit(key, msgque);
 
     while (rand() % 10 < 9)
     {
@@ -72,19 +49,22 @@ void child_proc(key_t key, int proc_num)
         {
         case 0:
         {
-            if (mrecv(&msg)!= 0)
-		printf("Child%d:Error while receiving\n",proc_num);
+            if (mrecv(msgque, msg, 50)!= 0)
+				printf("Child%d:Error while receiving\n",proc_num);
+			else
+				printf("Child%d:%s\n",proc_num, msg);
         }
         break;
         default:
         {
-            if (msend(msg))
-		printf("Child%d:Error while sending\n",proc_num);
+			sprintf(msg,"[Child%d] says msg %d",proc_num, msg_num++);
+            if (msend(msgque, msg, 50))
+				printf("Child%d:Error while sending\n",proc_num);
         }
         }
         sleep(rand()%5);
     }
-    mderegister(key);
+    mclose(msgque);
 
 }
 
@@ -94,7 +74,7 @@ int main(int argc, char *argv[], char *envp[])
     int num_proc = 2;
     pid_t pid[50]={0};
     int pid_count = 0;
-    key_t key;
+    int key;
     int i;
 
     if (argc==3)
@@ -125,21 +105,20 @@ fork_again:
     pid[pid_count] = fork();
     if (pid[pid_count] == 0)
     {
-        //Child
-        //TODO send/recv
+        /*Child*/
         child_proc(key, pid_count);
         printf("Done\n");
     }
     else
     {
-        //Parent
+        /*Parent*/
 #ifdef DEBUG
         printf("Child pid=%d created.\n",pid[pid_count]);
 #endif
         pid_count++;
         if (--num_proc) goto fork_again;
 
-        //Wait for child completion
+        /*Wait for child completion*/
         for (i = 0; i < pid_count; ++i)
         {
             int status;

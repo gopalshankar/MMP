@@ -28,10 +28,14 @@
 
 struct MQueue mQueues_[MQ_MAX_MSGQUES];
 
+struct timer mq_timer;	/* watchdog timer for cleanup operations */
 
-
-PRIVATE int cleanOnTimer( ) { /* Need to call this periodically using timer callback */
-	return 0;
+PRIVATE void cleanOnTimer(struct timer *tp ) { /* Need to call this periodically using timer callback */
+	printf("\nCS551 I am inside cleanOnTimer!\n"); /*remove once tested */
+	
+	/* cleanup all existing message queues*/
+	
+	set_timer(tp, MQ_CLEANUP_TIMER, cleanOnTimer, mproc[PM_PROC_NR].mp_endpoint); /*restart timer*/
 }
 
 PRIVATE int insertUser( struct MQueue *mq, int proc_nr) {
@@ -90,6 +94,7 @@ PRIVATE int removeAllMessages( struct MQueue *mq ) {
 
 PUBLIC int do_minit(void)
 {
+	static int mq_timer_init = 0;
 	int token = 0;
 	int i = 0;
 	int firstFreeQueue = -1;
@@ -97,6 +102,12 @@ PUBLIC int do_minit(void)
 	
 	printf("\nCS551 I am inside minit!\n");
 	
+	if(mq_timer_init == 0)
+	{
+		init_timer(&mq_timer); /* timer init happens only once */
+		set_timer(&mq_timer, MQ_CLEANUP_TIMER, cleanOnTimer, mproc[PM_PROC_NR].mp_endpoint);
+		mq_timer_init = 1;
+	}
 	/* Read token and MsgQue */
 	token = m_in.m1_i1;
 	sys_datacopy(who_p, (phys_bytes) m_in.m1_p1, SELF, (phys_bytes) user_mq, sizeof(struct MsgQue) );
@@ -121,9 +132,9 @@ PUBLIC int do_minit(void)
 		
 	/* This is new request so, give him a new MQueue */
 	mQueues_[ firstFreeQueue ].token = token;
-	insertUser( &mQueues_[i], who_p );
+	insertUser( &mQueues_[firstFreeQueue], who_p );
 	
-	user_mq->queue = &mQueues_[i];
+	user_mq->queue = &mQueues_[firstFreeQueue];
 	sys_datacopy(SELF, (phys_bytes) user_mq, who_p, (phys_bytes)  m_in.m1_p1, sizeof(struct MsgQue) );
 	
 	return MQ_SUCCESS;
@@ -209,7 +220,7 @@ PUBLIC int do_mrecv(void)
 	if( mq->userHead ) {
 		struct MQUser *user = mq->userHead;
 		while( user && user->type==MQ_SENDER && user->state==MQ_USER_BLOCKED ) {
-			/*unpause( user->proc_nr ); /* Wake-up */
+			/*unpause( user->proc_nr );  Wake-up */
 			user = user->next;
 		}
 	}

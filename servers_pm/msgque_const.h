@@ -10,6 +10,7 @@
 #define MQ_MAX_MSGQUES 128
 #define MQ_MAX_MESSAGES 512
 #define MQ_MAX_BYTES_IN_MSG 256 /* Single msg que can hold 512 * 256 bytes */
+#define MQ_CLEANUP_TIMER 50000 /* number of ticks after which cleanup is to be run */
 
 
 /* OTHERS */
