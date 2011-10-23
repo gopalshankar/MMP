@@ -19,7 +19,7 @@
   * 
   */
 struct MsgNode {
-	int messageNo;
+	unsigned long messageNo;
 	char *message;   
 	int len;
 	struct MsgNode *next;
@@ -29,7 +29,7 @@ struct MsgNode {
  * 
  */
 struct MQUser {   /* Dynamically allocated */
-	int messageNo; 	/* This is the last message recieve used */
+	unsigned long messageNo; 	/* This is the last message recieve used */
 	int proc_nr; 	/* Receiver's process number */
 	int state;	/* Blocked or Active */
 	int type; 	/* Sender or reciever = has meaning only with 'state' */
@@ -41,7 +41,7 @@ struct MQueue{
 	int token;	/* Unique identifier for this message queue, 
 	             * user gives this */
 	int queueLen;
-	int msgCounter; /* next free no for new message */
+	unsigned long msgCounter; /* next free no for new message */
 	struct MsgNode *msgHead; 
 	struct MsgNode *msgTail; 
 	struct MQUser *userHead;
