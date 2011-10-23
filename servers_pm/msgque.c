@@ -26,7 +26,7 @@
 #include "mproc.h"
 #include "param.h"
 
-PRIVATE MQueue mQueue_[MQ_MAX_MSGQUES];
+struct MQueue mQueues_[MQ_MAX_MSGQUES];
 
 
 
@@ -34,19 +34,19 @@ PRIVATE int cleanOnTimer( ) { /* Need to call this periodically using timer call
 	return 0;
 }
 
-PRIVATE int insertUser( MQueue *mq, int proc_nr) {
+PRIVATE int insertUser( struct MQueue *mq, int proc_nr) {
 	return 0;
 }
 
 
-PRIVATE int removeUser( MQueue *mq, int proc_nr ) {
+PRIVATE int removeUser( struct MQueue *mq, int proc_nr ) {
 	return 0;
 }
 
 /* This is not supposed to fail */
-PRIVATE int setUserProperty( MQueue *mq, int type, int state ) {
+PRIVATE int setUserProperty( struct MQueue *mq, int type, int state ) {
 	
-	MQUser *user = mq->userHead;
+	struct MQUser *user = mq->userHead;
 	while( user ) 	{
 		if( user->proc_nr == who_p ) {
 			user->type = type;
@@ -57,7 +57,7 @@ PRIVATE int setUserProperty( MQueue *mq, int type, int state ) {
 	return MQ_SUCCESS;
 }
 
-PRIVATE int insertMessage( MQueue *mq, char *message ) {
+PRIVATE int insertMessage( struct MQueue *mq, char *message ) {
 	if( mq->queueLen == MQ_MAX_MESSAGES )
 		return (MQ_ERR_MAX_MESSAGES);
 
@@ -67,30 +67,39 @@ PRIVATE int insertMessage( MQueue *mq, char *message ) {
 	return MQ_SUCCESS;
 }
 
-PRIVATE int readReciever( MQueue *mq ) {
+PRIVATE int readMessage( struct MQueue *mq, char *message ) {
+	return MQ_SUCCESS;
+}
+
+/* Called by readReciever */
+PRIVATE int readReciever( struct MQueue *mq ) {
 	/* if you are the last reciever in the queue 
 	 * then delete the element from MsgNode */
 	return MQ_SUCCESS;
 }
 
-/* Called by readReciever */
-PRIVATE int removeMessage( MQueue *mq ) {
+PRIVATE int removeMessage( struct MQueue *mq ) {
 
 	mq->queueLen--;		
 	return MQ_SUCCESS;	
 }
 
+PRIVATE int removeAllMessages( struct MQueue *mq ) {
+	return MQ_SUCCESS;
+}
+
 PUBLIC int do_minit(message *m)
 {
 	int token = 0;
+	int i = 0;
 	int firstFreeQueue = -1;
-	MsgQue *user_mq;
+	struct MsgQue *user_mq;
 	
 	printf("\nCS551 I am inside minit!\n");
 	
 	/* Read token and MsgQue */
 	token = m_in.m1_i1;
-	sys_datacopy(who_p, (virbytes) m_in.m1_p1, SELF, (virbytes) user_mq, sizeof(MsgQue) );
+	sys_datacopy(who_p, (phys_bytes) m_in.m1_p1, SELF, (phys_bytes) user_mq, sizeof(struct MsgQue) );
 	
 	/* Check if already exists MQueue with such token 
 	 * If Yes, return MQueue address in MsgQueue->queue 
@@ -98,8 +107,8 @@ PUBLIC int do_minit(message *m)
 	 */
 	 for( i=0; i< MQ_MAX_MSGQUES ; i++) {
 		if( mQueues_[i].token == i ) {
-			user_mq->queue = &mQueue_[i];
-			sys_datacopy(SELF, (virbytes) user_mq, who_p, (virbytes)  m_in.m1_p1, sizeof(MsgQue) );
+			user_mq->queue = &mQueues_[i];
+			sys_datacopy(SELF, (phys_bytes) user_mq, who_p, (phys_bytes)  m_in.m1_p1, sizeof(struct MsgQue) );
 			return( MQ_SUCCESS );
 		}
 		if( mQueues_[i].token = -1 && firstFreeQueue == -1 )
@@ -111,11 +120,11 @@ PUBLIC int do_minit(message *m)
 		return ( MQ_ERR_MAX_MSGQUE );
 		
 	/* This is new request so, give him a new MQueue */
-	mQueue_[ firstFreeQueue ].token = token;
-	insertUser( &mQueue_[i], who_p );
+	mQueues_[ firstFreeQueue ].token = token;
+	insertUser( &mQueues_[i], who_p );
 	
-	user_mq->queue = &mQueue_[i];
-	sys_datacopy(SELF, (virbytes) user_mq, who_p, (virbytes)  m_in.m1_p1, sizeof(MsgQue) );
+	user_mq->queue = &mQueues_[i];
+	sys_datacopy(SELF, (phys_bytes) user_mq, who_p, (phys_bytes)  m_in.m1_p1, sizeof(struct MsgQue) );
 	
 	return MQ_SUCCESS;
 }
@@ -123,15 +132,15 @@ PUBLIC int do_minit(message *m)
 PUBLIC int do_msend(message *m)
 {
 	int len;
-	MsgQue *user_mq;
+	struct MsgQue *user_mq;
 	char *message;
-	MQueue *mq;
+	struct MQueue *mq;
 	printf("\nCS551 I am inside msend!\n");
 	
 	/* Read token and MsgQue */
 	len = m_in.m1_i1;
-	sys_datacopy(who_p, (virbytes) m_in.m1_p1, SELF, (virbytes) user_mq, sizeof(MsgQue) );
-	sys_datacopy(who_p, (virbytes) m_in.m1_p2, SELF, (virbytes) message, len );
+	sys_datacopy(who_p, (phys_bytes) m_in.m1_p1, SELF, (phys_bytes) user_mq, sizeof(struct MsgQue) );
+	sys_datacopy(who_p, (phys_bytes) m_in.m1_p2, SELF, (phys_bytes) message, len );
 	
 	/* Validate that such token/queue exists */
 	mq = user_mq->queue;
@@ -146,7 +155,7 @@ PUBLIC int do_msend(message *m)
 		 pause();
 		  
 		 /* Add message to mq->MsgNode */
-		 removeSender( mq, who_p );
+		 removeUser( mq, who_p );
 		 setUserProperty( mq, MQ_SENDER, MQ_USER_ACTIVE );
 		 return MQ_SUCCESS;
 	}
@@ -156,9 +165,9 @@ PUBLIC int do_msend(message *m)
 	
 	/* Wake-up Recievers if they are sleeping */
 	if( mq->userHead ) {
-		MQUser *user = mq->userHead;
-		while( user && user->type==MQ_RECIEVER && user->state=MQ_USER_BLOCKED ) {
-			unpause( user->proc_nr ); /* Wake-up */
+		struct MQUser *user = mq->userHead;
+		while( user && user->type==MQ_RECIEVER && user->state==MQ_USER_BLOCKED ) {
+			/*unpause( user->proc_nr ); /* Wake-up */
 			user = user->next;
 		}
 	}
@@ -169,14 +178,14 @@ PUBLIC int do_msend(message *m)
 PUBLIC int do_mrecv(message *m)
 {
 	int len;
-	MsgQue *user_mq;
+	struct MsgQue *user_mq;
 	char *message;
-	MQueue *mq;
+	struct MQueue *mq;
 	printf("\nCS551 I am inside mrecv!\n");
 	
 	/* Read token and MsgQue */
 	len = m_in.m1_i1;
-	sys_datacopy(who_p, (virbytes) m_in.m1_p1, SELF, (virbytes) user_mq, sizeof(MsgQue) );
+	sys_datacopy(who_p, (phys_bytes) m_in.m1_p1, SELF, (phys_bytes) user_mq, sizeof(struct MsgQue) );
 
 	/* Validate that such token/queue exists */
 	mq = user_mq->queue;
@@ -184,7 +193,7 @@ PUBLIC int do_mrecv(message *m)
 		return ( ERR_INVALID_MQ );
 	
 	/* Block if MQueue is EMPTY */
-	if( mq->MsgNode == NULL ) {
+	if( mq->msgHead == NULL ) {
 		 setUserProperty( mq, MQ_RECIEVER, MQ_USER_BLOCKED );
 		 
 		 /* Block Reciever */
@@ -197,10 +206,10 @@ PUBLIC int do_mrecv(message *m)
 	readMessage( mq, message );
 	
 	/* Wake-up Sender if they are sleeping */
-	if( mq->shead ) {
-		MQUser *user = mq->userHead;
-		while( user && user->type==MQ_SENDER && user->state=MQ_USER_BLOCKED ) {
-			unpause( user->proc_nr ); /* Wake-up */
+	if( mq->userHead ) {
+		struct MQUser *user = mq->userHead;
+		while( user && user->type==MQ_SENDER && user->state==MQ_USER_BLOCKED ) {
+			/*unpause( user->proc_nr ); /* Wake-up */
 			user = user->next;
 		}
 	}
@@ -210,25 +219,26 @@ PUBLIC int do_mrecv(message *m)
 
 PUBLIC int do_mclose(message *m)
 {
-	MsgQue *user_mq;
-	MQueue *mq;
+	int token;
+	struct MsgQue *user_mq;
+	struct MQueue *mq;
 	printf("\nCS551 I am inside mclose!\n");
 	
 	/* Read MsgQue */
 	token = m_in.m1_i1;
-	sys_datacopy(who_p, (virbytes) m_in.m1_p1, SELF, (virbytes) user_mq, sizeof(MsgQue) );
+	sys_datacopy(who_p, (phys_bytes) m_in.m1_p1, SELF, (phys_bytes) user_mq, sizeof(struct MsgQue) );
 	
 	/* Validate that such token/queue exists */
 	mq = user_mq->queue;
 
-	if( INVALID_MQ( mq, user_mq->token ) || mq.userHead == NULL )
+	if( INVALID_MQ( mq, user_mq->token ) || mq->userHead == NULL )
 		return ( ERR_INVALID_MQ );
 	
 	/* Remove element from userHead */
 	removeUser( mq, who_p );
-	if( mq.userHead == NULL ) { /* free the Message Queue */
-		mq.token = MQ_FREE;
-		mq.queueLen = 0; 
+	if( mq->userHead == NULL ) { /* free the Message Queue */
+		mq->token = MQ_FREE;
+		mq->queueLen = 0; 
 		removeAllMessages( mq );
 	}
 	
@@ -237,20 +247,20 @@ PUBLIC int do_mclose(message *m)
 
 PUBLIC int do_mclean(message *m)
 {
-	MsgQue *user_mq;
-	int rc;
-	MQueue *mq;
-	MQUser *user;
+	struct MsgQue *user_mq;
+	int token,rc;
+	struct MQueue *mq;
+	struct MQUser *user;
 
 	printf("\nCS551 I am inside mclean!\n");
 	
 	/* Read MsgQue */
 	token = m_in.m1_i1;
-	sys_datacopy(who_p, (virbytes) m_in.m1_p1, SELF, (virbytes) user_mq, sizeof(MsgQue) );
+	sys_datacopy(who_p, (phys_bytes) m_in.m1_p1, SELF, (phys_bytes) user_mq, sizeof(struct MsgQue) );
 	
 	/* Validate that such token/queue exists */
 	mq = user_mq->queue;
-	if( INVALID_MQ( mq, user_mq->token ) || mq.userHead == NULL )
+	if( INVALID_MQ( mq, user_mq->token ) || mq->userHead == NULL )
 		return ( ERR_INVALID_MQ );
 		
 	/* Ping every one and see if they are all alive */
@@ -267,8 +277,8 @@ PUBLIC int do_mclean(message *m)
 		return( ERR_MQ_INUSE );
 		
 	/* Free the MQueue */
-	mq.token = MQ_FREE;
-	mq.queueLen = 0; 
+	mq->token = MQ_FREE;
+	mq->queueLen = 0; 
 	removeAllMessages( mq );
 	
 	return MQ_SUCCESS;

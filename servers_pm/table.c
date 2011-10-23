@@ -125,11 +125,11 @@ _PROTOTYPE (int (*call_vec[]), (void) ) = {
 	do_getdma,	/* 110 = getdma */
 	do_srv_kill,	/* 111 = srv_kill */
  	no_sys, 	/* 112 = gcov_flush */
- 	do_minit,       /* 113 */
- 	do_mrecv,  	/* 114 */
- 	do_msend,       /* 115 */
- 	do_mclose,	/* 116 */
- 	do_mclean,	/* 117 */
+ 	do_minit,       /* 113 = minit */
+ 	do_mrecv,  	/* 114 = mrecv */
+ 	do_msend,       /* 115 = msend */
+ 	do_mclose,	/* 116 = mclose */
+ 	do_mclean	/* 117 = mclean */
 };
 /* This should not fail with "array size is negative": */
 extern int dummy[sizeof(call_vec) == NCALLS * sizeof(call_vec[0]) ? 1 : -1];

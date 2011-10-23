@@ -6,7 +6,7 @@
  * and structures associated with it
  */
  
-PUBLIC struct MsgQue {
+struct MsgQue {
 	int token; /* This identifies the Message Queue uniquely
 			    * Multiple applications can use same key to 
 				* operate of single queue in multicast mode */

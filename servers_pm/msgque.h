@@ -11,13 +11,13 @@
 /* This structure hold all MQ users who are registered
  * 
  */
-typedef struct MQUser_t{   /* Dynamically allocated */
+struct MQUser {   /* Dynamically allocated */
 	int messageNo; 			 /* This is the last message recieve used */
 	int proc_nr; 			 /* Receiver's process number */
 	int state;				 /* Blocked or Active */
 	int type; 				 /* Sender or reciever = has meaning only with 'state' */
-	struct MQUser_t *next; /* If many are waiting to read message */
-} MQUser;
+	struct MQUser *next; /* If many are waiting to read message */
+};
 
  /* 
   * Linked list maintaining all the message posted by msend
@@ -34,13 +34,13 @@ struct MsgNode {
 	struct MsgNode *next;
 };
   
-typedef struct {	  
+struct MQueue{	  
 	int token;	/* Unique identifier for this message queue, 
 	             * user gives this */
 	int queueLen;
 	struct MsgNode *msgHead; 
-	MQUser *userHead;
-} MQueue;
-#define INVALID_MQ( mq, tok ) (mq < mQueue[0] || mq > mQueue[MQ_MAX_MSGQUES] || mq->token != tok )
+	struct MQUser *userHead;
+} ;
+#define INVALID_MQ( mq, tok ) (mq < &mQueues_[0] || mq > &mQueues_[MQ_MAX_MSGQUES] || mq->token != tok )
 	
  
