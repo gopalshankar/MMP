@@ -88,7 +88,7 @@ PRIVATE int removeAllMessages( struct MQueue *mq ) {
 	return MQ_SUCCESS;
 }
 
-PUBLIC int do_minit(message *m)
+PUBLIC int do_minit(void)
 {
 	int token = 0;
 	int i = 0;
@@ -129,7 +129,7 @@ PUBLIC int do_minit(message *m)
 	return MQ_SUCCESS;
 }
 
-PUBLIC int do_msend(message *m)
+PUBLIC int do_msend(void)
 {
 	int len;
 	struct MsgQue *user_mq;
@@ -167,7 +167,7 @@ PUBLIC int do_msend(message *m)
 	if( mq->userHead ) {
 		struct MQUser *user = mq->userHead;
 		while( user && user->type==MQ_RECIEVER && user->state==MQ_USER_BLOCKED ) {
-			/*unpause( user->proc_nr ); /* Wake-up */
+			/*unpause( user->proc_nr );  Wake-up */
 			user = user->next;
 		}
 	}
@@ -175,7 +175,7 @@ PUBLIC int do_msend(message *m)
 	return MQ_SUCCESS;
 }
 
-PUBLIC int do_mrecv(message *m)
+PUBLIC int do_mrecv(void)
 {
 	int len;
 	struct MsgQue *user_mq;
@@ -217,7 +217,7 @@ PUBLIC int do_mrecv(message *m)
 	return MQ_SUCCESS;
 }
 
-PUBLIC int do_mclose(message *m)
+PUBLIC int do_mclose(void)
 {
 	int token;
 	struct MsgQue *user_mq;
@@ -245,7 +245,7 @@ PUBLIC int do_mclose(message *m)
 	return MQ_SUCCESS;
 }
 
-PUBLIC int do_mclean(message *m)
+PUBLIC int do_mclean(void)
 {
 	struct MsgQue *user_mq;
 	int token,rc;

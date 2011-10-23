@@ -8,11 +8,11 @@ struct memory;
 #include <timers.h>
 
 /* project 2: multicast */
-_PROTOTYPE( int do_minit, (message *m));
-_PROTOTYPE( int do_msend, (message *m));
-_PROTOTYPE( int do_mrecv, (message *m));
-_PROTOTYPE( int do_mclose, (message *m));
-_PROTOTYPE( int do_mclean, (message *m));
+_PROTOTYPE( int do_minit, (void));
+_PROTOTYPE( int do_msend, (void));
+_PROTOTYPE( int do_mrecv, (void));
+_PROTOTYPE( int do_mclose, (void));
+_PROTOTYPE( int do_mclean, (void));
 
 /* alarm.c */
 _PROTOTYPE( int do_alarm, (void)					);
