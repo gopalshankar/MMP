@@ -8,17 +8,6 @@
  #include <minix/libmsgque.h>
  #include "msgque_const.h"
 
-/* This structure hold all MQ users who are registered
- * 
- */
-struct MQUser {   /* Dynamically allocated */
-	int messageNo; 			 /* This is the last message recieve used */
-	int proc_nr; 			 /* Receiver's process number */
-	int state;				 /* Blocked or Active */
-	int type; 				 /* Sender or reciever = has meaning only with 'state' */
-	struct MQUser *next; /* If many are waiting to read message */
-};
-
  /* 
   * Linked list maintaining all the message posted by msend
   * 
@@ -31,14 +20,28 @@ struct MQUser {   /* Dynamically allocated */
 struct MsgNode {
 	int messageNo;
 	char *message;   
+	int len;
 	struct MsgNode *next;
 };
   
+/* This structure hold all MQ users who are registered
+ * 
+ */
+struct MQUser {   /* Dynamically allocated */
+	int messageNo; 	/* This is the last message recieve used */
+	int proc_nr; 	/* Receiver's process number */
+	int state;	/* Blocked or Active */
+	int type; 	/* Sender or reciever = has meaning only with 'state' */
+	struct MQUser *next; /* If many are waiting to read message */
+};
+
 struct MQueue{	  
 	int token;	/* Unique identifier for this message queue, 
 	             * user gives this */
 	int queueLen;
+	int msgCounter; /* next free no for new message */
 	struct MsgNode *msgHead; 
+	struct MsgNode *msgTail; 
 	struct MQUser *userHead;
 } ;
 #define INVALID_MQ( mq, tok ) (mq < &mQueues_[0] || mq > &mQueues_[MQ_MAX_MSGQUES] || mq->token != tok )
