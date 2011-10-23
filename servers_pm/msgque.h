@@ -6,6 +6,7 @@
  * 
  */
  #include <minix/libmsgque.h>
+ #include <minix/ipc.h>
  #include "msgque_const.h"
 
  /* 
@@ -32,6 +33,7 @@ struct MQUser {   /* Dynamically allocated */
 	int proc_nr; 	/* Receiver's process number */
 	int state;	/* Blocked or Active */
 	int type; 	/* Sender or reciever = has meaning only with 'state' */
+	message args;    /* User only when unpaused */
 	struct MQUser *next; /* If many are waiting to read message */
 };
 
