@@ -39,7 +39,7 @@ void child_proc(int key, int proc_num)
     Convert seconds to a unsigned
     integer.
     */
-    srand((unsigned int) seconds);
+    srand((unsigned int) seconds+proc_num);
 
 	printf("Child%d:msgque=0x%x\n",proc_num, &msgque);
 

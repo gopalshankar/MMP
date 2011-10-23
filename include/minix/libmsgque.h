@@ -5,17 +5,8 @@
  * Multicast Message Queue User syscall's 
  * and structures associated with it
  */
- 
- /* Return codes */
-#define MQ_SUCCESS 0
-#define MQ_FAILED -1
-#define MQ_ERR_MAX_MSGQUE   -2
-#define MQ_ERR_MAX_MESSAGES -3
-#define MQ_ERR_MAX_RECIEVERS -4
-#define ERR_INVALID_MQ -5
-#define ERR_MQ_INUSE -6
 
-PUBLIC struct MsgQue {
+struct MsgQue {
 	int token; /* This identifies the Message Queue uniquely
 			    * Multiple applications can use same key to 
 				* operate of single queue in multicast mode */
@@ -29,3 +20,12 @@ PUBLIC struct MsgQue {
 };
 
 
+ 
+ /* Return codes */
+#define MQ_SUCCESS 0
+#define MQ_FAILED -1
+#define MQ_ERR_MAX_MSGQUE   -2
+#define MQ_ERR_MAX_MESSAGES -3
+#define MQ_ERR_MAX_RECIEVERS -4
+#define ERR_INVALID_MQ -5
+#define ERR_MQ_INUSE -6
