@@ -148,7 +148,7 @@ PRIVATE void setUserProperty( struct MQueue *mq, int type, int state ) {
 	printf("\nCS551 DBG: setUserProperty\n");
 
 	while( user ) 	{
-		if( user->proc_nr == who_p ) {
+		if( user->proc_nr == who_e ) {
 			user->type = type;
 			user->state = state;
 			return;
@@ -208,7 +208,7 @@ PUBLIC int do_minit(void)
 {
 	int token;
 	int i;
-	struct MsgQue *user_mq;
+	struct MsgQue user_mq;
 	int firstFreeQueue ;
 	static int mq_timer_init = 0;
 	
@@ -217,23 +217,27 @@ PUBLIC int do_minit(void)
 
 	if(mq_timer_init == 0)
 	{
+		printf("\nCS551 DBG: do_minit(): init_timer\n");	
 		init_timer(&mq_timer); /* timer init happens only once */
+		printf("\nCS551 DBG: do_minit(): set_timer\n");	
 		set_timer(&mq_timer, MQ_CLEANUP_TIMER, cleanOnTimer, mproc[PM_PROC_NR].mp_endpoint);
 		mq_timer_init = 1;
 	}
 
 	/* Read token and MsgQue */
+	printf("\nCS551 DBG: do_minit(): token=%d\n",m_in.m1_i1);	
 	token = m_in.m1_i1;
-	sys_datacopy(who_p, (phys_bytes) m_in.m1_p1, SELF, (phys_bytes) user_mq, sizeof(struct MsgQue) );
+	printf("\nCS551 DBG: do_minit(): MsgQue=0x%x\n",m_in.m1_p1);	
+	sys_datacopy(who_e, (vir_bytes) m_in.m1_p1, SELF, (vir_bytes) &user_mq, sizeof(struct MsgQue) );
 	
 	/* Check if already exists MQueue with such token 
 	 * If Yes, return MQueue address in MsgQueue->queue 
 	 * This happens ussually when reciever comes in 
 	 */
 	 for( i=0; i< MQ_MAX_MSGQUES ; i++) {
-		if( mQueues_[i].token == i ) {
-			user_mq->queue = &mQueues_[i];
-			sys_datacopy(SELF, (phys_bytes) user_mq, who_p, (phys_bytes)  m_in.m1_p1, sizeof(struct MsgQue) );
+		if( mQueues_[i].token == token ) {
+			user_mq.queue = &mQueues_[i];
+			sys_datacopy(SELF, (vir_bytes) &user_mq, who_e, (vir_bytes)  m_in.m1_p1, sizeof(struct MsgQue) );
 			return( MQ_SUCCESS );
 		}
 		if( mQueues_[i].token = -1 && firstFreeQueue == -1 )
@@ -246,10 +250,10 @@ PUBLIC int do_minit(void)
 		
 	/* This is new request so, give him a new MQueue */
 	mQueues_[ firstFreeQueue ].token = token;
-	insertUser( &mQueues_[ firstFreeQueue ], who_p );
+	insertUser( &mQueues_[ firstFreeQueue ], who_e );
 	
-	user_mq->queue = &mQueues_[ firstFreeQueue ];
-	sys_datacopy(SELF, (phys_bytes) user_mq, who_p, (phys_bytes)  m_in.m1_p1, sizeof(struct MsgQue) );
+	user_mq.queue = &mQueues_[ firstFreeQueue ];
+	sys_datacopy(SELF, (vir_bytes) &user_mq, who_e, (vir_bytes)  m_in.m1_p1, sizeof(struct MsgQue) );
 	
 	return MQ_SUCCESS;
 }
@@ -265,7 +269,7 @@ PUBLIC int do_msend(void)
 	
 	/* Read token and MsgQue */
 	len = m_in.m1_i1;
-	sys_datacopy(who_p, (phys_bytes) m_in.m1_p1, SELF, (phys_bytes) user_mq, sizeof(struct MsgQue) );
+	sys_datacopy(who_e, (vir_bytes) m_in.m1_p1, SELF, (vir_bytes) user_mq, sizeof(struct MsgQue) );
 	
 	/* Validate that such token/queue exists */
 	mq = user_mq->queue;
@@ -285,8 +289,8 @@ PUBLIC int do_msend(void)
 		
 	/* Add message to mq->MsgNode */
 	message = (char*) malloc( len );
-	sys_datacopy(who_p, (phys_bytes) m_in.m1_p2, SELF, (phys_bytes) message, len );
-	setUserMessageNo( mq, who_p, mq->msgCounter ); /* send is reciever THINK */
+	sys_datacopy(who_e, (vir_bytes) m_in.m1_p2, SELF, (vir_bytes) message, len );
+	setUserMessageNo( mq, who_e, mq->msgCounter ); /* send is reciever THINK */
 	insertMessage( mq, message, len );
 	
 	/* Wake-up Recievers if they are sleeping */
@@ -315,7 +319,7 @@ PUBLIC int do_mrecv(void)
 	
 	/* Read token and MsgQue */
 	len = m_in.m1_i1;
-	sys_datacopy(who_p, (phys_bytes) m_in.m1_p1, SELF, (phys_bytes) user_mq, sizeof(struct MsgQue) );
+	sys_datacopy(who_e, (vir_bytes) m_in.m1_p1, SELF, (vir_bytes) user_mq, sizeof(struct MsgQue) );
 
 	/* Validate that such token/queue exists */
 	mq = user_mq->queue;
@@ -323,7 +327,7 @@ PUBLIC int do_mrecv(void)
 		return ( ERR_INVALID_MQ );
 	
 	/* Block if no new message arrived */
-	qUser = getUserPtr( mq, who_p );
+	qUser = getUserPtr( mq, who_e );
 	if( mq->msgCounter == qUser->messageNo ) {
 		 setUserProperty( mq, MQ_RECIEVER, MQ_USER_BLOCKED );
 		 
@@ -343,7 +347,7 @@ PUBLIC int do_mrecv(void)
 
 	/* Copy message to user buffer */
 	bytesToCopy = (len > msgNode->len)? msgNode->len: len;
-	sys_datacopy(SELF, msgNode->message, qUser->proc_nr, (phys_bytes) m_in.m1_p2, bytesToCopy );
+	sys_datacopy(SELF, (vir_bytes) msgNode->message, qUser->proc_nr, (vir_bytes) m_in.m1_p2, bytesToCopy );
 
 	/* Next message to read by next mrecv() 
 	 * if this is last message in queue
@@ -374,7 +378,7 @@ PUBLIC int do_mclose(void)
 	
 	/* Read MsgQue */
 	token = m_in.m1_i1;
-	sys_datacopy(who_p, (phys_bytes) m_in.m1_p1, SELF, (phys_bytes) user_mq, sizeof(struct MsgQue) );
+	sys_datacopy(who_e, (vir_bytes) m_in.m1_p1, SELF, (vir_bytes) user_mq, sizeof(struct MsgQue) );
 	
 	/* Validate that such token/queue exists */
 	mq = user_mq->queue;
@@ -383,7 +387,7 @@ PUBLIC int do_mclose(void)
 		return ( ERR_INVALID_MQ );
 	
 	/* Remove element from userHead */
-	removeUser( mq, who_p );
+	removeUser( mq, who_e );
 	if( mq->userHead == NULL ) { /* free the Message Queue */
 		mq->token = MQ_FREE;
 		mq->queueLen = 0; 
@@ -404,7 +408,7 @@ PUBLIC int do_mclean(void)
 	
 	/* Read MsgQue */
 	token = m_in.m1_i1;
-	sys_datacopy(who_p, (phys_bytes) m_in.m1_p1, SELF, (phys_bytes) user_mq, sizeof(struct MsgQue) );
+	sys_datacopy(who_e, (vir_bytes) m_in.m1_p1, SELF, (vir_bytes) user_mq, sizeof(struct MsgQue) );
 	
 	/* Validate that such token/queue exists */
 	mq = user_mq->queue;
