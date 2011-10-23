@@ -33,9 +33,6 @@ struct timer mq_timer; /* watchdog timer for cleanup operations */
 
 PUBLIC void init_all_msg_queues( void ) {
 	int i;
-	static int initialized = 0;
-
-	if( initialized ) return;
 	
 	for( i=0; i< MQ_MAX_MSGQUES; i++ )
 	{
@@ -45,8 +42,6 @@ PUBLIC void init_all_msg_queues( void ) {
 		mQueues_[i].msgTail = NULL;
 		mQueues_[i].userHead = NULL;
 	}
-	
-	initialized = 1;
 }
 
 PRIVATE void cleanOnTimer(struct timer *tp ) { /* Need to call this periodically using timer callback */
@@ -65,7 +60,7 @@ PRIVATE int insertUser( struct MQueue *mq, int proc_nr) {
 	struct MQUser *newUser = (struct MQUser*) malloc( sizeof(struct MQUser) );
 	newUser->messageNo = mq->msgCounter;
 	newUser->proc_nr = proc_nr;
-	newUser->state = MQ_USER_BLOCKED;
+	newUser->state = MQ_USER_ACTIVE;
 	newUser->type = MQ_RECIEVER; /* read only when state is MQ_USER_BLOCKED */
 
 	printf("\nCS551 DBG: insertUser\n");
@@ -91,8 +86,13 @@ PRIVATE void removeUser( struct MQueue *mq, int proc_nr ) {
 				mq->userHead = tmp->next;
 			else
 				prev->next = tmp->next;
-
 			free( tmp );
+	
+			if( mq->userHead == NULL ) { 
+				mq->token = MQ_FREE;
+				mq->queueLen = 0; 
+				truncateQueue( mq );
+			}
 			return;
 		}
 		prev = tmp;
@@ -131,10 +131,10 @@ PRIVATE struct MQUser* getUserPtr( struct MQueue *mq, int proc_nr ) {
 }
 
 /* If there are no users */
-PRIVATE int getMinUserMessageNo( struct MQueue *mq ) {
+PRIVATE unsigned long getMinUserMessageNo( struct MQueue *mq ) {
 	
 
-	int minMsgNo = 0xFFFF;
+	unsigned long minMsgNo = 0xFFFF;
 	struct MQUser *user = mq->userHead;
 
 	printf("\nCS551 DBG: getMinUserMessageNo\n");
@@ -192,15 +192,16 @@ PRIVATE int insertMessage( struct MQueue *mq, char *message, int len ) {
  */
 PRIVATE int truncateQueue( struct MQueue *mq ) {
 
-	int minMsgNo;
+	unsigned long minMsgNo;
 	struct MsgNode *tmp = mq->msgHead;
 
 	printf("\nCS551 DBG: truncateQueue\n");
 
 	minMsgNo = getMinUserMessageNo(mq);
-	while( tmp && tmp->messageNo < minMsgNo ) {
+	while( tmp && tmp->messageNo <= minMsgNo ) {
 			mq->msgHead = tmp->next;
-			mq->queueLen--;		
+			mq->queueLen--;	
+			free( tmp->message );
 			free( tmp );
 			tmp = mq->msgHead;
 	}
@@ -215,16 +216,17 @@ PUBLIC int do_minit(void)
 	int i;
 	static struct MsgQue user_mq;
 	int firstFreeQueue ;
-	static int mq_timer_init = 0;
+	static int mq_init = 0;
 	
-	firstFreeQueue = -1;
+	firstFreeQueue = MQ_FREE;
 	init_all_msg_queues(); /* Does is only once */
 
-	if(mq_timer_init == 0)
+	if(mq_init == 0)
 	{
+		init_all_msg_queues();
 		init_timer(&mq_timer); /* timer init happens only once */
 		set_timer(&mq_timer, MQ_CLEANUP_TIMER, cleanOnTimer, mproc[PM_PROC_NR].mp_endpoint);
-		mq_timer_init = 1;
+		mq_init = 1;
 	}
 
 	/* Read token and MsgQue */
@@ -239,15 +241,16 @@ PUBLIC int do_minit(void)
 	 for( i=0; i< MQ_MAX_MSGQUES ; i++) {
 		if( mQueues_[i].token == token ) {
 			user_mq.queue = &mQueues_[i];
+			user_mq.token = token;
 			sys_datacopy(SELF, (vir_bytes) &user_mq, who_e, (vir_bytes)  m_in.m1_p1, sizeof(struct MsgQue) );
 			return( MQ_SUCCESS );
 		}
-		if( mQueues_[i].token = -1 && firstFreeQueue == -1 )
+		if( mQueues_[i].token = MQ_FREE && firstFreeQueue == MQ_FREE )
 			firstFreeQueue = i;
 	 }
 	
 	/* Error if there are no free queues */
-	if( firstFreeQueue == -1 )
+	if( firstFreeQueue == MQ_FREE )
 		return ( MQ_ERR_MAX_MSGQUE );
 		
 	/* This is new request so, give him a new MQueue */
@@ -255,6 +258,7 @@ PUBLIC int do_minit(void)
 	insertUser( &mQueues_[ firstFreeQueue ], who_e );
 	
 	user_mq.queue = &mQueues_[ firstFreeQueue ];
+	user_mq.token = token;
 	sys_datacopy(SELF, (vir_bytes) &user_mq, who_e, (vir_bytes)  m_in.m1_p1, sizeof(struct MsgQue) );
 	
 	return MQ_SUCCESS;
@@ -305,7 +309,6 @@ PUBLIC int do_msend(void)
 	/* Add message to mq->MsgNode */
 	sendMsg = (char*) malloc( len );
 	sys_datacopy(who_e, (vir_bytes) in_args.m1_p2, SELF, (vir_bytes) sendMsg, len );
-	setUserMessageNo( mq, who_e, mq->msgCounter ); /* send is reciever THINK */
 	insertMessage( mq, sendMsg, len );
 	
 	/* Wake-up Recievers if they are sleeping */
@@ -371,24 +374,24 @@ PUBLIC int do_mrecv(void)
 	msgNode=mq->msgHead;
 
 	/* search for next message in queue */
-	while( msgNode->messageNo == qUser->messageNo ) {
+
+	/* Next message to read by next mrecv() 
+	 * if this is last message in queue
+	 * qUser->messageNo+1 == mq->msgCounter */
+	qUser->messageNo++; 
+	while( msgNode && msgNode->messageNo != qUser->messageNo ) {
 		msgNode = msgNode->next;
 	}
 
 	/* Copy message to user buffer */
 	bytesToCopy = (len > msgNode->len)? msgNode->len: len;
 	sys_datacopy(SELF, msgNode->message, qUser->proc_nr, (vir_bytes) in_args.m1_p2, bytesToCopy );
-
-	/* Next message to read by next mrecv() 
-	 * if this is last message in queue
-	 * qUser->messageNo+1 == mq->msgCounter */
-	qUser->messageNo++; 
 	truncateQueue( mq );
 	
 	/* Wake-up Sender if they are sleeping */
 	if( mq->userHead ) {
 		struct MQUser *user = mq->userHead;
-	         struct mproc *rmp;
+	        struct mproc *rmp;
 		while( user && user->type==MQ_SENDER && user->state==MQ_USER_BLOCKED ) {
 			rmp = &mproc[ user->proc_nr ];
 			rmp->mp_flags &= ~WAITING;
@@ -421,11 +424,6 @@ PUBLIC int do_mclose(void)
 	
 	/* Remove element from userHead */
 	removeUser( mq, who_e );
-	if( mq->userHead == NULL ) { /* free the Message Queue */
-		mq->token = MQ_FREE;
-		mq->queueLen = 0; 
-		truncateQueue( mq );
-	}
 	
 	return MQ_SUCCESS;
 }
@@ -436,6 +434,7 @@ PUBLIC int do_mclean(void)
 	int token,rc;
 	struct MQueue *mq;
 	struct MQUser *user;
+	struct mproc *rmp;
 
 	printf("\nCS551 DBG: do_mclean\n");
 	
@@ -451,11 +450,12 @@ PUBLIC int do_mclean(void)
 	/* Ping every one and see if they are all alive */
 	user = mq->userHead;
 	while( user ) {
+		rmp = &mproc[ user->proc_nr ];
 		/* need to get process PID here */
-		rc = kill( user->proc_nr, 0 ); /* Not sure which API to use */
-		if( rc != 0 ) {
+		rc = kill( rmp->mp_pid, 0 ); /* Not sure which API to use */
+		if( rc != 0 ) 
 			removeUser( mq, user->proc_nr );
-		}
+		
 	}
 	
 	/* If there are active users mq->userHead will not be NULL */
