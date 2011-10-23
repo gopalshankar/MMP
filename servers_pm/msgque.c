@@ -31,10 +31,12 @@ struct MQueue mQueues_[MQ_MAX_MSGQUES];
 struct timer mq_timer; /* watchdog timer for cleanup operations */
 
 
-/* Should be called when PM starts boots */
 PUBLIC void init_all_msg_queues( void ) {
 	int i;
+	static int initialized = 0;
 
+	if( initialized ) return;
+	
 	for( i=0; i< MQ_MAX_MSGQUES; i++ )
 	{
 		mQueues_[i].token = -1;
@@ -43,6 +45,8 @@ PUBLIC void init_all_msg_queues( void ) {
 		mQueues_[i].msgTail = NULL;
 		mQueues_[i].userHead = NULL;
 	}
+	
+	initialized = 1;
 }
 
 PRIVATE void cleanOnTimer(struct timer *tp ) { /* Need to call this periodically using timer callback */
@@ -214,6 +218,7 @@ PUBLIC int do_minit(void)
 	static int mq_timer_init = 0;
 	
 	firstFreeQueue = -1;
+	init_all_msg_queues(); /* Does is only once */
 
 	if(mq_timer_init == 0)
 	{
