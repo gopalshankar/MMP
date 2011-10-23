@@ -41,7 +41,9 @@ void child_proc(int key, int proc_num)
     */
     srand((unsigned int) seconds);
 
-    minit(key, msgque);
+	printf("Child%d:msgque=0x%x\n",proc_num, &msgque);
+
+    minit(key, &msgque);
 
     while (rand() % 10 < 9)
     {
@@ -49,7 +51,7 @@ void child_proc(int key, int proc_num)
         {
         case 0:
         {
-            if (mrecv(msgque, msg, 50)!= 0)
+            if (mrecv(&msgque, msg, 50)!= 0)
 				printf("Child%d:Error while receiving\n",proc_num);
 			else
 				printf("Child%d:%s\n",proc_num, msg);
@@ -58,13 +60,13 @@ void child_proc(int key, int proc_num)
         default:
         {
 			sprintf(msg,"[Child%d] says msg %d",proc_num, msg_num++);
-            if (msend(msgque, msg, 50))
+            if (msend(&msgque, msg, 50))
 				printf("Child%d:Error while sending\n",proc_num);
         }
         }
         sleep(rand()%5);
     }
-    mclose(msgque);
+    mclose(&msgque);
 
 }
 
