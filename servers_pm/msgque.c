@@ -36,7 +36,7 @@ PUBLIC void init_all_msg_queues( void ) {
 	
 	for( i=0; i< MQ_MAX_MSGQUES; i++ )
 	{
-		mQueues_[i].token = -1;
+		mQueues_[i].token = MQ_FREE;
 		mQueues_[i].msgCounter = 0;
 		mQueues_[i].msgHead = NULL;
 		mQueues_[i].msgTail = NULL;
@@ -61,10 +61,11 @@ PRIVATE void cleanOnTimer(struct timer *tp ) { /* Need to call this periodically
 		while( user ) {
 			rmp = &mproc[ user->proc_nr ];
 			/* need to get process PID here */
-			rc = kill( rmp->mp_pid, 0 ); /* Not sure which API to use */
-			if( rc != 0 ) 
+			printf("Checking pid=%d\n", rmp->mp_pid);
+			/*rc = kill( rmp->mp_pid, 0 );*/ /* Not sure which API to use */
+			if( rmp->mp_pid == 0 ) 
 				removeUser( mq, user->proc_nr );
-		
+			user = user->next;
 		}
 	}
 	
@@ -605,10 +606,11 @@ PUBLIC int do_mclean(void)
 	while( user ) {
 		rmp = &mproc[ user->proc_nr ];
 		/* need to get process PID here */
-		rc = kill( rmp->mp_pid, 0 ); /* Not sure which API to use */
-		if( rc != 0 ) 
+		printf("Checking pid=%d\n", rmp->mp_pid);
+		/*rc = kill( rmp->mp_pid, 0 );*/ /* Not sure which API to use */
+		if( rmp->mp_pid == 0 ) 
 			removeUser( mq, user->proc_nr );
-		
+		user = user->next;
 	}
 	
 	/* If there are active users mq->userHead will not be NULL */

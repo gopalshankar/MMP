@@ -66,6 +66,7 @@ int main(int argc, char *argv[], char *envp[])
 		    printf("Sender got:%d\n",rc);
     }
 	repeat--;
+	mclean(&msgque);
 	if (sleep_time>0)
 		sleep(sleep_time);
 	}
