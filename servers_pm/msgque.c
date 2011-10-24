@@ -45,8 +45,29 @@ PUBLIC void init_all_msg_queues( void ) {
 }
 
 PRIVATE void cleanOnTimer(struct timer *tp ) { /* Need to call this periodically using timer callback */
+	int i, rc;
+	struct MQueue *mq;
+	struct MQUser *user;
+	struct mproc *rmp;
 	printf("\nCS551 I am inside cleanOnTimer"); /*remove once tested */
   	/* cleanup all existing message queues*/
+	for( i=0; i< MQ_MAX_MSGQUES; i++ )
+	{
+		if (mQueues_[i].token == MQ_FREE)
+			continue;
+		mq=&mQueues_[i];
+		/* Ping every one and see if they are all alive */
+		user = mq->userHead;
+		while( user ) {
+			rmp = &mproc[ user->proc_nr ];
+			/* need to get process PID here */
+			rc = kill( rmp->mp_pid, 0 ); /* Not sure which API to use */
+			if( rc != 0 ) 
+				removeUser( mq, user->proc_nr );
+		
+		}
+	}
+	
   	set_timer(tp, MQ_CLEANUP_TIMER, cleanOnTimer, mproc[PM_PROC_NR].mp_endpoint); /*restart timer*/
 
 	return;
