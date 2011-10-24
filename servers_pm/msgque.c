@@ -113,6 +113,26 @@ PRIVATE void removeUser( struct MQueue *mq, int proc_nr ) {
 
 /* First args NULL, causes search in all Q */
 PRIVATE struct MQUser* getUserPtr( struct MQueue *mq, int proc_nr ) {
+	struct MQUser *tmp;
+
+	printf("\nCS551 DBG: getUserPtr %x %d", mq, proc_nr);
+
+	tmp = mq->userHead;
+	while( tmp ) {
+		printf("\nCS551 DBG: getUserPtr %x %d", tmp, tmp->proc_nr);
+		if( tmp->proc_nr == proc_nr ) {
+		    printf("\nCS551 DBG: getUserPtr Found %x %d", tmp, proc_nr);
+		    return tmp; 
+		}
+		tmp = tmp->next;
+	}
+	printf("\nCS551 DBG: getUserPtr Should NOT COME HERE %x %d", mq, proc_nr);
+
+	return NULL; /* never reaches here */
+}
+
+/* OLD DEFINITION - WILL MORE IT LATTER */
+PRIVATE struct MQUser* getUserPtrOld( struct MQueue *mq, int proc_nr ) {
 	struct MQueue *q;
 	struct MQUser *tmp;
 	int i;
@@ -205,7 +225,7 @@ PRIVATE int insertMessage( struct MQueue *mq, void *message, int len ) {
 	newMN->messageNo = mq->msgCounter;
 	mq->msgCounter++;
 
-	printf("\nCS551 DBG: insertMessage");
+	printf("\nCS551 DBG: insertMessage: %20s", (char*)newMN->message);
 
 	/* Add to list */
 	if( mq->msgHead == NULL ) {
@@ -237,6 +257,7 @@ PRIVATE int truncateQueue( struct MQueue *mq ) {
 
 	minMsgNo = getMinUserMessageNo(mq);
 	while( tmp && tmp->messageNo <= minMsgNo ) {
+	printf("\nCS551 DBG: truncateQueue removing msg %d", tmp->messageNo);	
 			mq->msgHead = tmp->next;
 			mq->queueLen--;	
 			free( tmp->message );
@@ -247,6 +268,61 @@ PRIVATE int truncateQueue( struct MQueue *mq ) {
 
 	return MQ_SUCCESS;	
 }
+
+
+/* Called by mrecv() when message already present in Queue 
+ * Called by msend() when unblocking reciever
+ */
+PUBLIC int readMessage( struct MQueue *mq, struct MQUser *qUser ) {
+	struct MsgNode *msgNode;
+	int bytesToCopy;
+	int len = qUser->args.m1_i1;
+
+	printf("\nCS551 DBG: readMessage");
+	msgNode=mq->msgHead;
+
+	/* search for next message in queue */
+
+	/* Next message to read by next mrecv() 
+	 * if this is last message in queue
+	 * qUser->messageNo+1 == mq->msgCounter */
+	qUser->messageNo++; 
+	while( msgNode && msgNode->messageNo != qUser->messageNo ) {
+		msgNode = msgNode->next;
+	}
+
+	/* Copy message to user buffer */
+	bytesToCopy = (len > msgNode->len)? msgNode->len: len;
+	sys_datacopy(SELF, (vir_bytes) msgNode->message, qUser->who_e, (vir_bytes) qUser->args.m1_p2, bytesToCopy );
+	truncateQueue( mq );
+
+	if (bytesToCopy == msgNode->len)
+		return MQ_SUCCESS;
+	else
+		return MQ_TRUNCATED;
+
+}
+
+/* called by msend when Queue has space
+ * called by mrecv when unblocking sender.
+ */
+PUBLIC int putInQueue( struct MQueue *mq, struct MQUser *qUser) {	
+	int rc;
+ 	int len;
+	void *sendMsg;
+
+	len = qUser->args.m1_i1;
+	sendMsg = (void*) malloc( len );
+	if (sendMsg==NULL)
+		return ERR_MALLOC_FAIL;
+	
+	/* Add message to mq->MsgNode */
+	sys_datacopy(qUser->who_e, (vir_bytes) qUser->args.m1_p2, SELF, (vir_bytes) sendMsg, len );
+	rc = insertMessage( mq, sendMsg, len );
+
+	return rc;	
+}
+
 
 PUBLIC int do_minit(void)
 {
@@ -327,38 +403,27 @@ PUBLIC int do_msend(void)
 	void *sendMsg;
 	struct MQueue *mq;
 	struct MQUser *qUser;
-	message in_args;
+
 
 	printf("\nCS551 DBG: do_msend %d", who_p);
 
-	/* Check if this is an unpaused syscall */
-	qUser = getUserPtr( NULL, who_p );
-	if (qUser==NULL)
-		return ERR_INVALID_ARG;
-		
-	if( qUser->state == MQ_USER_BLOCKED ) {
-		qUser->type = MQ_SENDER;
-		qUser->state = MQ_USER_ACTIVE;
-		in_args = qUser->args;
-	} else 
-		in_args = m_in;
-
-	if((in_args.m1_i1<=0)||(in_args.m1_p1==NULL)||(in_args.m1_p2==NULL))
+	if((m_in.m1_i1<=0)||(m_in.m1_p1==NULL)||(m_in.m1_p2==NULL))
 		return ERR_INVALID_ARG;
 		
 	/* Read token and MsgQue */
-	len = in_args.m1_i1;
-	sys_datacopy(who_e, (vir_bytes) in_args.m1_p1, SELF, (vir_bytes) &user_mq, sizeof(struct MsgQue) );
+	len = m_in.m1_i1;
+	sys_datacopy(who_e, (vir_bytes) m_in.m1_p1, SELF, (vir_bytes) &user_mq, sizeof(struct MsgQue) );
 	
 	/* Validate that such token/queue exists */
 	mq = user_mq.queue;
 	if( INVALID_MQ( mq, user_mq.token ) )
 		return ( ERR_INVALID_MQ );
-	
-	sendMsg = (void*) malloc( len );
-	if (sendMsg==NULL)
-		return ERR_MALLOC_FAIL;
-	
+
+	/* Get User Details */	
+	qUser = getUserPtr( mq, who_p );
+	qUser->who_e = who_e;
+	qUser->args = m_in;
+
 	/* Block if MQueue is FULL */
 	if( mq->queueLen == MQ_MAX_MESSAGES ) {
 	         struct mproc *rmp;
@@ -368,16 +433,12 @@ PUBLIC int do_msend(void)
 		 rmp->mp_flags |= WAITING;
 		 qUser->type= MQ_SENDER;
 		 qUser->state= MQ_USER_BLOCKED;
-		 qUser->args = in_args;
+ 	 	 qUser->args = m_in;
 		 return (SUSPEND); 
 	}
-		
-	/* Add message to mq->MsgNode */
-	sys_datacopy(who_e, (vir_bytes) in_args.m1_p2, SELF, (vir_bytes) sendMsg, len );
-	rc = insertMessage( mq, sendMsg, len );
-	if (rc != MQ_SUCCESS)
-		return rc;
 	
+	rc = putInQueue( mq, qUser);
+
 	/* Wake-up Recievers if they are sleeping */
 	if( mq->userHead ) {
 		struct MQUser *user = mq->userHead;
@@ -388,50 +449,38 @@ PUBLIC int do_msend(void)
 				printf("\nCS551 DBG: unblock rcv do_msend %d", user->proc_nr);
 				rmp = &mproc[ user->proc_nr ];
 				rmp->mp_flags &= ~WAITING;
-				setreply(user->proc_nr, who_p ); 
+
+				user->state=MQ_USER_ACTIVE;
+
+				rc = readMessage( mq, user );
+				setreply(user->proc_nr, rc ); 
 			}
 			user = user->next;
 		}
 	}
 	
-	return MQ_SUCCESS;
+	return rc;
 }
 
 PUBLIC int do_mrecv(void)
 {
-	int len;
+	int len,rc;
 	static struct MsgQue user_mq;
 	struct MQueue *mq;
 	struct MQUser *qUser;
 	struct MsgNode *msgNode;
 	int bytesToCopy ;
-	message in_args;
 
 	printf("\nCS551 DBG: do_mrecv %d", who_p);
 
-	/* Check if this is an unpaused syscall */
-	qUser = getUserPtr( NULL, who_p ); 
-
-	if (qUser==NULL)
-		return ERR_INVALID_ARG;
-
-	if( qUser->state == MQ_USER_BLOCKED ) {
-		printf("\nCS551 DBG: wake-up do_mrecv %d", who_p);
-		qUser->type=MQ_RECIEVER;
-		qUser->state=MQ_USER_ACTIVE;
-		in_args = qUser->args;
-	} else 
-		in_args = m_in;
-	printf("\nCS551 DBG: do_mrecv %d TEST1", who_p);
-
-	if((in_args.m1_i1<=0)||(in_args.m1_p1==NULL)||(in_args.m1_p2==NULL))
+	if((m_in.m1_i1<=0)||(m_in.m1_p1==NULL)||(m_in.m1_p2==NULL))
 		return ERR_INVALID_ARG;
 		
 	printf("\nCS551 DBG: do_mrecv %d TEST2", who_p);
 
 	/* Read token and MsgQue */
-	len = in_args.m1_i1;
-	sys_datacopy(who_e, (vir_bytes) in_args.m1_p1, SELF, (vir_bytes) &user_mq, sizeof(struct MsgQue) );
+	len = m_in.m1_i1;
+	sys_datacopy(who_e, (vir_bytes) m_in.m1_p1, SELF, (vir_bytes) &user_mq, sizeof(struct MsgQue) );
 
 	printf("\nCS551 DBG: do_mrecv %d TEST3", who_p);
 	/* Validate that such token/queue exists */
@@ -439,38 +488,27 @@ PUBLIC int do_mrecv(void)
 	if( INVALID_MQ( mq, user_mq.token ))
 		return ( ERR_INVALID_MQ );
 	
+	/* Get User Details */	
+	qUser = getUserPtr( mq, who_p );
+	qUser->args = m_in;
+	qUser->who_e = who_e;
+
 	/* Block if no new message arrived */
 	if( mq->msgCounter == qUser->messageNo ) {
 	         struct mproc *rmp;
 
-	printf("\nCS551 DBG: do_mrecv %d TEST4 blocking", who_p);
+		 printf("\nCS551 DBG: do_mrecv %d TEST4 blocking", who_p);
 		 /* Block Reciever */
 		 rmp = &mproc[ who_p ];
 		 rmp->mp_flags |= WAITING;
 		 qUser->type= MQ_RECIEVER;
 		 qUser->state= MQ_USER_BLOCKED;
-		 qUser->args = in_args;
 		 
 		 return (SUSPEND); 
 	}
 
 	printf("\nCS551 DBG: readMessage");
-	msgNode=mq->msgHead;
-
-	/* search for next message in queue */
-
-	/* Next message to read by next mrecv() 
-	 * if this is last message in queue
-	 * qUser->messageNo+1 == mq->msgCounter */
-	qUser->messageNo++; 
-	while( msgNode && msgNode->messageNo != qUser->messageNo ) {
-		msgNode = msgNode->next;
-	}
-
-	/* Copy message to user buffer */
-	bytesToCopy = (len > msgNode->len)? msgNode->len: len;
-	sys_datacopy(SELF, (vir_bytes) msgNode->message, who_e, (vir_bytes) in_args.m1_p2, bytesToCopy );
-	truncateQueue( mq );
+	rc = readMessage( mq, qUser );
 	
 	/* Wake-up Sender if they are sleeping */
 	if( mq->userHead ) {
@@ -478,21 +516,21 @@ PUBLIC int do_mrecv(void)
 		struct mproc *rmp;
 		while( user ) {
 			printf("\nCS551 DBG: do_mrecv loop %d", user->state);
-			if( user->type==MQ_SENDER && user->state==MQ_USER_BLOCKED ) { {
+			if( user->type==MQ_SENDER && user->state==MQ_USER_BLOCKED ) { 
 				printf("\nCS551 DBG: do_mrecv unblocking sender %d", user->proc_nr);
 				rmp = &mproc[ user->proc_nr ];
 				rmp->mp_flags &= ~WAITING;
-				setreply(user->proc_nr,  who_p); 
+
+				user->state=MQ_USER_ACTIVE;
+
+				rc = putInQueue( mq, user );
+				setreply(user->proc_nr,  rc); 
 			}
 			user = user->next;
-			}
 		}
 	}
 
-	if (bytesToCopy == msgNode->len)
-			return MQ_SUCCESS;
-	else
-			return MQ_TRUNCATED;
+	return rc;
 }
 
 

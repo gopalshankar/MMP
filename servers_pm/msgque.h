@@ -33,6 +33,7 @@ struct MQUser {   /* Dynamically allocated */
 	int proc_nr; 	/* Receiver's process number */
 	int state;	/* Blocked or Active */
 	int type; 	/* Sender or reciever = has meaning only with 'state' */
+	int who_e;
 	message args;    /* User only when unpaused */
 	struct MQUser *next; /* If many are waiting to read message */
 };
