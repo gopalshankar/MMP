@@ -450,7 +450,6 @@ PUBLIC int do_msend(void)
 
 	/* Block if MQueue is FULL */
 	if( mq->queueLen == MQ_MAX_MESSAGES ) {
-	         struct mproc *rmp;
 		 free(sendMsg);
 		 /* Block sender */
 		 rmp = &mproc[ who_p ];
@@ -495,6 +494,8 @@ PUBLIC int do_mrecv(void)
 	static struct MsgQue user_mq;
 	struct MQueue *mq;
 	struct MQUser *qUser;
+	struct MQUser *user;
+	struct mproc *rmp;
 	struct MsgNode *msgNode;
 	int bytesToCopy ;
 
@@ -522,7 +523,16 @@ PUBLIC int do_mrecv(void)
 
 	/* Block if no new message arrived */
 	if( mq->msgCounter == qUser->messageNo ) {
-	         struct mproc *rmp;
+		
+		/* If there are no messages in Queue, reset mq->msgCounter & all user->messageNo = 0 */
+		if( qUser->messageNo == getMinUserMessageNo( mq ) ) {
+			mq->msgCounter = 0;
+			user = mq->userHead;
+			while( user ) {
+				user->messageNo = 0;
+				user = user->next;
+			}
+		}
 
 		 printf("\nCS551 DBG: do_mrecv %d TEST4 blocking", who_p);
 		 /* Block Reciever */
@@ -538,23 +548,20 @@ PUBLIC int do_mrecv(void)
 	rc = readMessage( mq, qUser );
 	
 	/* Wake-up Sender if they are sleeping */
-	if( mq->userHead ) {
-		struct MQUser *user = mq->userHead;
-		struct mproc *rmp;
-		while( user ) {
-			printf("\nCS551 DBG: do_mrecv loop %d", user->state);
-			if( user->type==MQ_SENDER && user->state==MQ_USER_BLOCKED ) { 
-				printf("\nCS551 DBG: do_mrecv unblocking sender %d", user->proc_nr);
-				rmp = &mproc[ user->proc_nr ];
-				rmp->mp_flags &= ~WAITING;
+	user = mq->userHead;
+	while( user ) {
+		printf("\nCS551 DBG: do_mrecv loop %d", user->state);
+		if( user->type==MQ_SENDER && user->state==MQ_USER_BLOCKED ) { 
+			printf("\nCS551 DBG: do_mrecv unblocking sender %d", user->proc_nr);
+			rmp = &mproc[ user->proc_nr ];
+			rmp->mp_flags &= ~WAITING;
 
-				user->state=MQ_USER_ACTIVE;
+			user->state=MQ_USER_ACTIVE;
 
-				rc = putInQueue( mq, user );
-				setreply(user->proc_nr,  rc); 
-			}
-			user = user->next;
+			rc = putInQueue( mq, user );
+			setreply(user->proc_nr,  rc); 
 		}
+		user = user->next;
 	}
 
 	return rc;
