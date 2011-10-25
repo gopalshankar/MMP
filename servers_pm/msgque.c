@@ -425,6 +425,8 @@ PUBLIC int do_msend(void)
 	void *sendMsg;
 	struct MQueue *mq;
 	struct MQUser *qUser;
+	struct MQUser *user;
+	struct mproc *rmp;
 
 
 	printf("\nCS551 DBG: do_msend %d", who_p);
@@ -459,26 +461,29 @@ PUBLIC int do_msend(void)
 		 return (SUSPEND); 
 	}
 	
+	/* There is no one else who called minit() 
+	 * Messages are ignored, if there is no one else to read it.
+	 */
+	if( mq->userHead->next == NULL )
+		return MQ_NO_RECIEVERS;
+	
 	rc = putInQueue( mq, qUser);
 
 	/* Wake-up Recievers if they are sleeping */
-	if( mq->userHead ) {
-		struct MQUser *user = mq->userHead;
-	    struct mproc *rmp;
-		while( user ) {
-			printf("\nCS551 DBG: loop unblock %d", user->state);
-			if( user->type==MQ_RECIEVER && user->state==MQ_USER_BLOCKED ){
-				printf("\nCS551 DBG: unblock rcv do_msend %d", user->proc_nr);
-				rmp = &mproc[ user->proc_nr ];
-				rmp->mp_flags &= ~WAITING;
-
-				user->state=MQ_USER_ACTIVE;
-
-				rc = readMessage( mq, user );
-				setreply(user->proc_nr, rc ); 
-			}
-			user = user->next;
+	user = mq->userHead;
+	while( user ) {
+		printf("\nCS551 DBG: loop unblock %d", user->state);
+		if( user->type==MQ_RECIEVER && user->state==MQ_USER_BLOCKED ){
+			printf("\nCS551 DBG: unblock rcv do_msend %d", user->proc_nr);
+			rmp = &mproc[ user->proc_nr ];
+			rmp->mp_flags &= ~WAITING;
+			
+			user->state=MQ_USER_ACTIVE;
+			
+			rc = readMessage( mq, user );
+			setreply(user->proc_nr, rc ); 
 		}
+		user = user->next;
 	}
 	
 	return rc;
