@@ -22,6 +22,7 @@ struct MsgQue {
 
  
  /* Return codes */
+#define MQ_TRUNCATED 1
 #define MQ_SUCCESS 0
 #define MQ_FAILED -1
 #define MQ_ERR_MAX_MSGQUE   -2
@@ -29,6 +30,6 @@ struct MsgQue {
 #define MQ_ERR_MAX_RECIEVERS -4
 #define ERR_INVALID_MQ -5
 #define ERR_MQ_INUSE -6
-#define MQ_TRUNCATED -7
 #define ERR_INVALID_ARG -8
 #define ERR_MALLOC_FAIL -9
+#define MQ_ERR_NO_RECIEVERS -10
