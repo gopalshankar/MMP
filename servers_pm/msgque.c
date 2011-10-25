@@ -465,7 +465,7 @@ PUBLIC int do_msend(void)
 	 * Messages are ignored, if there is no one else to read it.
 	 */
 	if( mq->userHead->next == NULL )
-		return MQ_NO_RECIEVERS;
+		return MQ_ERR_NO_RECIEVERS ;
 	
 	rc = putInQueue( mq, qUser);
 
