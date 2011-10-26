@@ -101,38 +101,6 @@ PRIVATE int insertUser( struct MQueue *mq, int proc_nr) {
 	return MQ_SUCCESS;
 }
 
-/* Any user calling mclose() will do below */
-PRIVATE void removeUser( struct MQueue *mq, int proc_nr ) {
-	struct MQUser *tmp;
-	struct MQUser *prev = NULL;
-
-	if(mq==NULL)
-		return;
-		
-	tmp = mq->userHead;
-	printf("\nCS551 DBG: removeUser");
-
-	while( tmp ) {
-		if( tmp->proc_nr == proc_nr )
-		{
-			if( prev == NULL )
-				mq->userHead = tmp->next;
-			else
-				prev->next = tmp->next;
-			free( tmp );
-	
-			if( mq->userHead == NULL ) { 
-				truncateQueue( mq );
-				mq->token = MQ_FREE;
-				mq->queueLen = 0; 
-			}
-			return;
-		}
-		prev = tmp;
-		tmp = tmp->next;
-	}
-}
-
 /* First args NULL, causes search in all Q */
 PRIVATE struct MQUser* getUserPtr( struct MQueue *mq, int proc_nr ) {
 	struct MQUser *tmp;
@@ -292,6 +260,42 @@ PRIVATE int truncateQueue( struct MQueue *mq ) {
 	return MQ_SUCCESS;	
 }
 
+/* Any user calling mclose() will do below */
+PRIVATE void removeUser( struct MQueue *mq, int proc_nr ) {
+	struct MQUser *tmp;
+	struct MQUser *prev = NULL;
+
+	if(mq==NULL)
+		return;
+		
+	tmp = mq->userHead;
+	printf("\nCS551 DBG: removeUser");
+
+	while( tmp ) {
+		if( tmp->proc_nr == proc_nr )
+		{
+			if( prev == NULL )
+				mq->userHead = tmp->next;
+			else
+				prev->next = tmp->next;
+			free( tmp );
+	
+			if( mq->userHead == NULL ) { 
+				truncateQueue( mq );
+				mq->token = MQ_FREE;
+				mq->queueLen = 0; 
+				mq->msgCounter = 0;
+				mq->msgHead = NULL;
+				mq->msgTail = NULL;
+				mq->userHead = NULL;
+			}
+			return;
+		}
+		prev = tmp;
+		tmp = tmp->next;
+	}
+}
+
 
 /* Called by mrecv() when message already present in Queue 
  * Called by msend() when unblocking reciever
@@ -397,7 +401,7 @@ PUBLIC int do_minit(void)
 			return( MQ_SUCCESS );
 
 		}
-		if( mQueues_[i].token = MQ_FREE && firstFreeQueue == MQ_FREE )
+		if( mQueues_[i].token == MQ_FREE && firstFreeQueue == MQ_FREE )
 			firstFreeQueue = i;
 	 }
 	
@@ -634,7 +638,10 @@ PUBLIC int do_mclean(void)
 	truncateQueue( mq );
 	mq->token = MQ_FREE;
 	mq->queueLen = 0; 
-	
+	mq->msgCounter = 0;
+	mq->msgHead = NULL;
+	mq->msgTail = NULL;
+	mq->userHead = NULL;	
 	return MQ_SUCCESS;
 }
 

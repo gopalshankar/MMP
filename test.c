@@ -49,13 +49,16 @@ int main(int argc, char *argv[], char *envp[])
     }
 
     minit(key, &msgque);
-	
+	printf("Process[%d] registered to queue[%d,0x%x]\n", getpid(), msgque.token, msgque.queue);
+	if (sleep_time>0)
+	    	sleep(sleep_time);
+
 	while(repeat>0)
 	{
 	if((proc_num<1)||(proc_num>2))
 	{
 		printf("\nEnter choice[1-recv, 2-send]");
-		scanf("%d",choice);
+		scanf("%d",&choice);
 	}
 	else
 	{
@@ -64,17 +67,17 @@ int main(int argc, char *argv[], char *envp[])
     if(choice==1){
 	    rc = mrecv(&msgque, msg, 50);
 	    if ( rc != MQ_SUCCESS)
-		    printf("%d:Error while receiving\n",rc);
+		    printf("Process[%d] %d:Error while receiving\n",getpid(), rc);
 	    else
-		    printf("Recved:%d %s\n",rc, msg);
+		    printf("Process[%d] Recved:%d %s\n", getpid(), rc, msg);
     } else if(choice==2)
     {
     	sprintf(msg,"Process[%d] MsgNo %d", getpid(), msg_num++);
 	    rc = msend(&msgque, msg, 50);
 	    if (rc != MQ_SUCCESS)
-		    printf("Sender: %d Error while sending\n",rc);
+		    printf("Process[%d] Sender: %d Error while sending\n", getpid(), rc);
 	    else
-		    printf("Sender got:%d\n",rc);
+		    printf("Process[%d] Sender got:%d\n",getpid(), rc);
     }
 	repeat--;
 	mclean(&msgque);
