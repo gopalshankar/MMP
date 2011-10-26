@@ -20,7 +20,7 @@
   */
 struct MsgNode {
 	unsigned long messageNo;
-	char *message;   
+	void *message;   
 	int len;
 	struct MsgNode *next;
 };

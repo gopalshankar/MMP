@@ -550,7 +550,7 @@ PUBLIC int do_mrecv(void)
 	
 	/* Wake-up Sender if they are sleeping */
 	user = mq->userHead;
-	while( user ) {
+	while(( user )&&(mq->queueLen < MQ_MAX_MESSAGES )) {
 		printf("\nCS551 DBG: do_mrecv loop %d", user->state);
 		if( user->type==MQ_SENDER && user->state==MQ_USER_BLOCKED ) { 
 			printf("\nCS551 DBG: do_mrecv unblocking sender %d", user->proc_nr);
