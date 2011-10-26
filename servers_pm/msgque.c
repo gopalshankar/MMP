@@ -242,10 +242,11 @@ PRIVATE int insertMessage( struct MQueue *mq, void *message, int len ) {
 	if(newMN==NULL)
 		return ERR_MALLOC_FAIL;
 		
+	mq->msgCounter++;
 	newMN->next = NULL;
+	newMN->len = len;
 	newMN->message = message;
 	newMN->messageNo = mq->msgCounter;
-	mq->msgCounter++;
 
 	printf("\nCS551 DBG: insertMessage: %20s", (char*)newMN->message);
 

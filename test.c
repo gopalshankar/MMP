@@ -19,7 +19,7 @@ int main(int argc, char *argv[], char *envp[])
     int pid_count = 0;
     int key;
     int i, rc;
-    char msg[50]="gopal";
+    char msg[50];
     int msg_num = 1;
 	int repeat = 1;
 	int sleep_time = 0;
@@ -59,6 +59,7 @@ int main(int argc, char *argv[], char *envp[])
 		    printf("Recved:%d %s\n",rc, msg);
     } else if(proc_num==2)
     {
+    	sprintf(msg,"Process[%d] MsgNo %d", getpid(), msg_num++);
 	    rc = msend(&msgque, msg, 50);
 	    if (rc != MQ_SUCCESS)
 		    printf("Sender: %d Error while sending\n",rc);
@@ -68,9 +69,4 @@ int main(int argc, char *argv[], char *envp[])
 	repeat--;
 	mclean(&msgque);
 	if (sleep_time>0)
-		sleep(sleep_time);
-	}
-    mclose(&msgque);
-
-    return 0;
-}
+		sleep
