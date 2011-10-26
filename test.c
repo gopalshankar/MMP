@@ -23,6 +23,7 @@ int main(int argc, char *argv[], char *envp[])
     int msg_num = 1;
 	int repeat = 1;
 	int sleep_time = 0;
+	int choice;
 
     if (argc>=3)
     {
@@ -51,13 +52,22 @@ int main(int argc, char *argv[], char *envp[])
 	
 	while(repeat>0)
 	{
-    if(proc_num==1){
+	if((proc_num<1)||(proc_num>2))
+	{
+		printf("\nEnter choice[1-recv, 2-send]");
+		scanf("%d",choice);
+	}
+	else
+	{
+		choice = proc_num;
+	}
+    if(choice==1){
 	    rc = mrecv(&msgque, msg, 50);
 	    if ( rc != MQ_SUCCESS)
 		    printf("%d:Error while receiving\n",rc);
 	    else
 		    printf("Recved:%d %s\n",rc, msg);
-    } else if(proc_num==2)
+    } else if(choice==2)
     {
     	sprintf(msg,"Process[%d] MsgNo %d", getpid(), msg_num++);
 	    rc = msend(&msgque, msg, 50);
@@ -69,4 +79,9 @@ int main(int argc, char *argv[], char *envp[])
 	repeat--;
 	mclean(&msgque);
 	if (sleep_time>0)
-		sleep
+		sleep(sleep_time);
+	}
+    mclose(&msgque);
+
+    return 0;
+}
